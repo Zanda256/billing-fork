@@ -130,7 +130,7 @@ uploads/
 files/
 
 # Migration backups
-migrations/backups/
+internal/manager/data/migrations/backups/
 
 # Test databases
 test.db

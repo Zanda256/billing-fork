@@ -2,11 +2,11 @@ package tests
 
 import (
 	"encoding/json"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/types"
+	"github.com/doujins-org/doujins-billing/internal/manager/web/webhook"
 	"strings"
 	"testing"
 
-	"github.com/doujins-org/doujins-billing/internal/services"
-	"github.com/doujins-org/doujins-billing/internal/services/webhook"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -242,12 +242,12 @@ func TestStringishSubscriptionIDNormalization(t *testing.T) {
 	payload, err := webhook.LoadTestWebhookPayload("nmi", "recurring_subscription_add.json")
 	require.NoError(t, err, "Should load payload")
 
-	var events []services.NMIWebhookEvent
+	var events []types.NMIWebhookEvent
 	require.NoError(t, json.Unmarshal([]byte(payload), &events))
 	require.NotEmpty(t, events, "expected at least one event payload")
 
 	for _, evt := range events {
-		var body services.NMIRecurringEventBody
+		var body types.NMIRecurringEventBody
 		require.NoError(t, json.Unmarshal(evt.EventBody, &body))
 
 		subID := body.SubscriptionID.Trimmed()

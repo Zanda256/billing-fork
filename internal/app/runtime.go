@@ -3,6 +3,25 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/admin"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/billing"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/cc-bill-alias"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/deduplication"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/email"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/entitlement"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/lifecycle"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/notification"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/payment"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/price"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/product"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/solana"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/subscription"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/user"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/vault"
+	"github.com/doujins-org/doujins-billing/internal/manager/web/webhook"
+	ccbill2 "github.com/doujins-org/doujins-billing/pkg/ccbill"
+	"github.com/doujins-org/doujins-billing/pkg/db"
+	"github.com/doujins-org/doujins-billing/pkg/nmi"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,10 +30,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/doujins-org/doujins-billing/config"
-	"github.com/doujins-org/doujins-billing/internal/db"
-	"github.com/doujins-org/doujins-billing/internal/integrations/ccbill"
-	"github.com/doujins-org/doujins-billing/internal/integrations/nmi"
-	"github.com/doujins-org/doujins-billing/internal/services"
 )
 
 // Runtime aggregates infrastructure clients and application services.
@@ -22,43 +37,43 @@ type Runtime struct {
 	DB                 *db.DB
 	RedisClient        *redis.Client
 	Config             *config.Config
-	CCBillClient       *ccbill.CCBillClient
-	CCBillRESTClient   *ccbill.RESTClient
-	CCBillDataLink     *ccbill.DataLinkClient
-	CCBillAliasService *services.CCBillAliasService
+	CCBillClient       *ccbill2.CCBillClient
+	CCBillRESTClient   *ccbill2.RESTClient
+	CCBillDataLink     *ccbill2.DataLinkClient
+	CCBillAliasService *cc_bill_alias.CCBillAliasService
 	NMIClients         map[string]*nmi.NMIClient
 	RiverClient        *river.Client[pgx.Tx]
 	riverPool          *pgxpool.Pool
 
-	UserService              *services.UserService
-	SubscriptionService      *services.SubscriptionService
-	ProductService           *services.ProductService
-	PriceService             *services.PriceService
-	NotificationQueueService *services.NotificationQueueService
-	NotificationService      *services.NotificationService
-	PaymentMethodService     *services.PaymentMethodService
-	PaymentService           *services.PaymentService
-	VaultService             *services.VaultService
+	UserService              *user.UserService
+	SubscriptionService      *subscription.SubscriptionService
+	ProductService           *product.ProductService
+	PriceService             *price.PriceService
+	NotificationQueueService *notification.NotificationQueueService
+	NotificationService      *notification.NotificationService
+	PaymentMethodService     *payment.PaymentMethodService
+	PaymentService           *payment.PaymentService
+	VaultService             *vault.VaultService
 
-	UserSubscriptionService   *services.UserSubscriptionService
-	PublicSubscriptionService *services.PublicSubscriptionService
-	AdminSubscriptionService  *services.AdminSubscriptionService
+	UserSubscriptionService   *user.UserSubscriptionService
+	PublicSubscriptionService *subscription.PublicSubscriptionService
+	AdminSubscriptionService  *admin.AdminSubscriptionService
 
-	EmailService             *services.EmailService
-	SubscriptionEmailService *services.SubscriptionEmailService
+	EmailService             *email.EmailService
+	SubscriptionEmailService *subscription.SubscriptionEmailService
 
-	BillingEventService *services.BillingEventService
-	EntitlementService  *services.EntitlementService
+	BillingEventService *billing.BillingEventService
+	EntitlementService  *entitlement.EntitlementService
 
-	SolanaWalletService        *services.SolanaWalletService
-	SolanaPaymentService       *services.SolanaPaymentService
-	SolanaPaymentIntentService *services.SolanaPaymentIntentService
+	SolanaWalletService        *solana.SolanaWalletService
+	SolanaPaymentService       *solana.SolanaPaymentService
+	SolanaPaymentIntentService *solana.SolanaPaymentIntentService
 
-	SubscriptionLifecycleService *services.SubscriptionLifecycleService
-	WebhookEventService          *services.WebhookEventService
-	WebhookDispatcher            *services.WebhookDispatcher
-	DeduplicationService         *services.DeduplicationService
-	WebhookProcessor             *services.WebhookProcessor
+	SubscriptionLifecycleService *lifecycle.SubscriptionLifecycleService
+	WebhookEventService          *webhook.WebhookEventService
+	WebhookDispatcher            *webhook.WebhookDispatcher
+	DeduplicationService         *deduplication.DeduplicationService
+	WebhookProcessor             *webhook.WebhookProcessor
 
 	riverStarted bool
 }

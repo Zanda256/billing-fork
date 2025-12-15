@@ -3,6 +3,29 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/admin"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/billing"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/cc-bill-alias"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/deduplication"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/email"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/entitlement"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/idempotency"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/lifecycle"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/notification"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/payment"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/price"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/product"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/solana"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/subscription"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/user"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/vault"
+	"github.com/doujins-org/doujins-billing/internal/manager/data/migrations/clickhouse"
+	"github.com/doujins-org/doujins-billing/internal/manager/data/migrations/postgres"
+	"github.com/doujins-org/doujins-billing/internal/manager/data/repo"
+	"github.com/doujins-org/doujins-billing/internal/manager/web/webhook"
+	ccbill2 "github.com/doujins-org/doujins-billing/pkg/ccbill"
+	"github.com/doujins-org/doujins-billing/pkg/db"
+	"github.com/doujins-org/doujins-billing/pkg/nmi"
 	"strings"
 	"time"
 
@@ -16,13 +39,6 @@ import (
 
 	authkitPostgres "github.com/PaulFidika/authkit/migrations/postgres"
 	"github.com/doujins-org/doujins-billing/config"
-	"github.com/doujins-org/doujins-billing/internal/db"
-	repo "github.com/doujins-org/doujins-billing/internal/db/repo"
-	"github.com/doujins-org/doujins-billing/internal/integrations/ccbill"
-	"github.com/doujins-org/doujins-billing/internal/integrations/nmi"
-	"github.com/doujins-org/doujins-billing/internal/services"
-	clickhousemigrations "github.com/doujins-org/doujins-billing/migrations/clickhouse"
-	postgresmigrations "github.com/doujins-org/doujins-billing/migrations/postgres"
 	"github.com/doujins-org/migratekit"
 )
 
@@ -47,14 +63,14 @@ func buildRuntime(cfg *config.Config) (*Runtime, error) {
 
 	serviceInstances := createServices(database, cfg, ccbillRESTClient, nmiClients)
 
-	var emailService *services.EmailService
-	var subscriptionEmailService *services.SubscriptionEmailService
+	var emailService *email.EmailService
+	var subscriptionEmailService *subscription.SubscriptionEmailService
 	if cfg.SendGrid != nil {
-		if es, err := services.NewEmailService(cfg.SendGrid); err != nil {
+		if es, err := email.NewEmailService(cfg.SendGrid); err != nil {
 			log.WithError(err).Warn("EmailService init failed; email disabled")
 		} else {
 			emailService = es
-			subscriptionEmailService = services.NewSubscriptionEmailService(
+			subscriptionEmailService = subscription.NewSubscriptionEmailService(
 				emailService,
 				serviceInstances.SubscriptionService,
 				serviceInstances.ProductService,
@@ -64,7 +80,7 @@ func buildRuntime(cfg *config.Config) (*Runtime, error) {
 		}
 	}
 
-	notificationService := services.NewNotificationService(
+	notificationService := notification.NewNotificationService(
 		serviceInstances.NotificationQueueService,
 		subscriptionEmailService,
 		emailService,
@@ -108,7 +124,7 @@ func buildRuntime(cfg *config.Config) (*Runtime, error) {
 		WebhookDispatcher:            serviceInstances.WebhookDispatcher,
 		DeduplicationService:         serviceInstances.DeduplicationService,
 	}
-	runtime.WebhookProcessor = &services.WebhookProcessor{
+	runtime.WebhookProcessor = &webhook.WebhookProcessor{
 		Events:     runtime.WebhookEventService,
 		Dispatcher: runtime.WebhookDispatcher,
 	}
@@ -121,7 +137,7 @@ func buildRuntime(cfg *config.Config) (*Runtime, error) {
 	// }
 
 	if cfg.ClickHouse != nil {
-		if bes, err := services.NewBillingEventService(cfg.ClickHouse); err != nil {
+		if bes, err := billing.NewBillingEventService(cfg.ClickHouse); err != nil {
 			log.WithError(err).Warn("BillingEventService init failed; analytics disabled")
 		} else {
 			runtime.BillingEventService = bes
@@ -236,7 +252,7 @@ func createRedisClient(cfg *config.Config) (*redis.Client, error) {
 	return client, nil
 }
 
-func createCCBillClient(cfg *config.Config) *ccbill.CCBillClient {
+func createCCBillClient(cfg *config.Config) *ccbill2.CCBillClient {
 	if cfg.CCBill != nil {
 		if cfg.CCBill.TestMode {
 			log.Warn("⚠️  CCBill TEST MODE is ENABLED - no real charges will be processed")
@@ -244,14 +260,14 @@ func createCCBillClient(cfg *config.Config) *ccbill.CCBillClient {
 			log.Warn("🔴 CCBill TEST MODE is DISABLED - REAL CHARGES WILL BE PROCESSED!")
 		}
 	}
-	return ccbill.NewClient(cfg.CCBill, cfg.Env == config.EnvProd)
+	return ccbill2.NewClient(cfg.CCBill, cfg.Env == config.EnvProd)
 }
 
-func createCCBillRESTClient(cfg *config.Config) *ccbill.RESTClient {
-	return ccbill.NewRESTClient(cfg.CCBill)
+func createCCBillRESTClient(cfg *config.Config) *ccbill2.RESTClient {
+	return ccbill2.NewRESTClient(cfg.CCBill)
 }
 
-func createCCBillDataLinkClient(cfg *config.Config) *ccbill.DataLinkClient {
+func createCCBillDataLinkClient(cfg *config.Config) *ccbill2.DataLinkClient {
 	if cfg.CCBill == nil {
 		return nil
 	}
@@ -260,7 +276,7 @@ func createCCBillDataLinkClient(cfg *config.Config) *ccbill.DataLinkClient {
 		return nil
 	}
 
-	client := ccbill.NewDataLinkClient(cfg.CCBill)
+	client := ccbill2.NewDataLinkClient(cfg.CCBill)
 	if err := client.ValidateConfig(); err != nil {
 		log.WithError(err).Warn("Invalid CCBill DataLink configuration; worker disabled")
 		return nil
@@ -269,48 +285,48 @@ func createCCBillDataLinkClient(cfg *config.Config) *ccbill.DataLinkClient {
 }
 
 type servicesInstances struct {
-	SubscriptionService *services.SubscriptionService
-	UserService         *services.UserService
-	CCBillAliasService  *services.CCBillAliasService
+	SubscriptionService *subscription.SubscriptionService
+	UserService         *user.UserService
+	CCBillAliasService  *cc_bill_alias.CCBillAliasService
 
-	ProductService             *services.ProductService
-	PriceService               *services.PriceService
-	NotificationQueueService   *services.NotificationQueueService
-	PaymentMethodService       *services.PaymentMethodService
-	PurchaseService            *services.PaymentService
-	EntitlementService         *services.EntitlementService
-	VaultService               *services.VaultService
-	SolanaWalletService        *services.SolanaWalletService
-	SolanaPaymentService       *services.SolanaPaymentService
-	SolanaPaymentIntentService *services.SolanaPaymentIntentService
+	ProductService             *product.ProductService
+	PriceService               *price.PriceService
+	NotificationQueueService   *notification.NotificationQueueService
+	PaymentMethodService       *payment.PaymentMethodService
+	PurchaseService            *payment.PaymentService
+	EntitlementService         *entitlement.EntitlementService
+	VaultService               *vault.VaultService
+	SolanaWalletService        *solana.SolanaWalletService
+	SolanaPaymentService       *solana.SolanaPaymentService
+	SolanaPaymentIntentService *solana.SolanaPaymentIntentService
 
-	UserSubscriptionService   *services.UserSubscriptionService
-	PublicSubscriptionService *services.PublicSubscriptionService
-	AdminSubscriptionService  *services.AdminSubscriptionService
+	UserSubscriptionService   *user.UserSubscriptionService
+	PublicSubscriptionService *subscription.PublicSubscriptionService
+	AdminSubscriptionService  *admin.AdminSubscriptionService
 
-	EmailService             *services.EmailService
-	SubscriptionEmailService *services.SubscriptionEmailService
+	EmailService             *email.EmailService
+	SubscriptionEmailService *subscription.SubscriptionEmailService
 
-	SubscriptionLifecycleService *services.SubscriptionLifecycleService
-	DeduplicationService         *services.DeduplicationService
-	WebhookEventService          *services.WebhookEventService
-	WebhookDispatcher            *services.WebhookDispatcher
+	SubscriptionLifecycleService *lifecycle.SubscriptionLifecycleService
+	DeduplicationService         *deduplication.DeduplicationService
+	WebhookEventService          *webhook.WebhookEventService
+	WebhookDispatcher            *webhook.WebhookDispatcher
 }
 
-func createServices(database *db.DB, cfg *config.Config, ccbillRESTClient *ccbill.RESTClient, nmiClients map[string]*nmi.NMIClient) *servicesInstances {
-	userService := services.NewUserService(database)
-	productService := services.NewProductService(database)
-	priceService := services.NewPriceService(database)
-	notificationQueueService := services.NewNotificationQueueService(database)
-	paymentMethodService := services.NewPaymentMethodService(database)
-	purchaseService := services.NewPaymentService(database)
-	entitlementService := services.NewEntitlementService(database)
-	aliasService := services.NewCCBillAliasService(database)
-	solanaWalletService := services.NewSolanaWalletService(database)
-	solanaPaymentService := services.NewSolanaPaymentService(database, cfg, priceService, purchaseService, productService, entitlementService, nil)
-	solanaPaymentIntentService := services.NewSolanaPaymentIntentService(database, cfg, priceService)
+func createServices(database *db.DB, cfg *config.Config, ccbillRESTClient *ccbill2.RESTClient, nmiClients map[string]*nmi.NMIClient) *servicesInstances {
+	userService := user.NewUserService(database)
+	productService := product.NewProductService(database)
+	priceService := price.NewPriceService(database)
+	notificationQueueService := notification.NewNotificationQueueService(database)
+	paymentMethodService := payment.NewPaymentMethodService(database)
+	purchaseService := payment.NewPaymentService(database)
+	entitlementService := entitlement.NewEntitlementService(database)
+	aliasService := cc_bill_alias.NewCCBillAliasService(database)
+	solanaWalletService := solana.NewSolanaWalletService(database)
+	solanaPaymentService := solana.NewSolanaPaymentService(database, cfg, priceService, purchaseService, productService, entitlementService, nil)
+	solanaPaymentIntentService := solana.NewSolanaPaymentIntentService(database, cfg, priceService)
 
-	subscriptionLifecycleService := services.NewSubscriptionLifecycleService(
+	subscriptionLifecycleService := lifecycle.NewSubscriptionLifecycleService(
 		database,
 		productService,
 		priceService,
@@ -318,7 +334,7 @@ func createServices(database *db.DB, cfg *config.Config, ccbillRESTClient *ccbil
 		notificationQueueService,
 	)
 
-	subscriptionService := services.NewSubscriptionService(
+	subscriptionService := subscription.NewSubscriptionService(
 		database,
 		priceService,
 		productService,
@@ -328,11 +344,11 @@ func createServices(database *db.DB, cfg *config.Config, ccbillRESTClient *ccbil
 		paymentMethodService,
 	)
 
-	vaultService := services.NewVaultService(paymentMethodService, subscriptionService, nmiClients, database)
+	vaultService := vault.NewVaultService(paymentMethodService, subscriptionService, nmiClients, database)
 	subscriptionService.VaultService = vaultService
-	subscriptionService.IdempotencyService = services.NewIdempotencyService(database)
+	subscriptionService.IdempotencyService = idempotency.NewIdempotencyService(database)
 
-	userSubscriptionService := services.NewUserSubscriptionService(
+	userSubscriptionService := user.NewUserSubscriptionService(
 		subscriptionService,
 		productService,
 		priceService,
@@ -342,12 +358,12 @@ func createServices(database *db.DB, cfg *config.Config, ccbillRESTClient *ccbil
 		nmiClients,
 	)
 
-	publicSubscriptionService := services.NewPublicSubscriptionService(
+	publicSubscriptionService := subscription.NewPublicSubscriptionService(
 		productService,
 		priceService,
 	)
 
-	adminSubscriptionService := services.NewAdminSubscriptionService(
+	adminSubscriptionService := admin.NewAdminSubscriptionService(
 		subscriptionService,
 		productService,
 		priceService,
@@ -356,9 +372,9 @@ func createServices(database *db.DB, cfg *config.Config, ccbillRESTClient *ccbil
 		purchaseService,
 	)
 
-	deduplicationService := services.NewDeduplicationService(database)
-	webhookEventService := services.NewWebhookEventService(database, cfg.GetWebhookRetryConfig())
-	webhookDispatcher := &services.WebhookDispatcher{
+	deduplicationService := deduplication.NewDeduplicationService(database)
+	webhookEventService := webhook.NewWebhookEventService(database, cfg.GetWebhookRetryConfig())
+	webhookDispatcher := &webhook.WebhookDispatcher{
 		DB:                           database,
 		PriceService:                 priceService,
 		ProductService:               productService,

@@ -6,12 +6,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/doujins-org/doujins-billing/pkg/db"
 	"net/http"
 	"testing"
 	"time"
 
 	"github.com/doujins-org/doujins-billing/config"
-	"github.com/doujins-org/doujins-billing/internal/db"
 	"github.com/doujins-org/doujins-billing/internal/server"
 
 	"github.com/redis/go-redis/v9"

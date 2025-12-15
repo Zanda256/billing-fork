@@ -1,10 +1,10 @@
 package tests
 
 import (
+	"github.com/doujins-org/doujins-billing/pkg/db"
 	"testing"
 
 	"github.com/doujins-org/doujins-billing/config"
-	"github.com/doujins-org/doujins-billing/internal/db"
 	"github.com/stretchr/testify/assert"
 )
 

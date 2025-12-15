@@ -3,13 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/doujins-org/doujins-billing/internal/manager/web/auth"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/doujins-org/doujins-billing/config"
-	"github.com/doujins-org/doujins-billing/internal/auth"
 	"github.com/doujins-org/doujins-billing/pkg/cache"
 )
 

@@ -3,6 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/doujins-org/doujins-billing/internal/manager/web/auth"
+	middleware2 "github.com/doujins-org/doujins-billing/internal/manager/web/middleware"
+	"github.com/doujins-org/doujins-billing/internal/manager/web/request"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,9 +14,6 @@ import (
 
 	"github.com/doujins-org/doujins-billing/config"
 	"github.com/doujins-org/doujins-billing/internal/app"
-	"github.com/doujins-org/doujins-billing/internal/auth"
-	"github.com/doujins-org/doujins-billing/internal/handlers"
-	"github.com/doujins-org/doujins-billing/internal/middleware"
 	"github.com/doujins-org/doujins-billing/pkg/cache"
 )
 
@@ -74,18 +74,18 @@ func (s *Server) setupHandlers() {
 		SkipPaths: []string{"/health/live", "/health/ready", "/healthz", "/readyz"},
 	}))
 	s.publicHandler.
-		Use(middleware.CORS(s.cfg.CorsOrigins)).
-		Use(middleware.RateLimit(s.cfg.RateLimits, s.rdb))
+		Use(middleware2.CORS(s.cfg.CorsOrigins)).
+		Use(middleware2.RateLimit(s.cfg.RateLimits, s.rdb))
 
 	// Admin handler (internal only, protected by API key)
 	s.adminHandler = gin.New()
 	s.adminHandler.Use(gin.Recovery())
-	s.adminHandler.Use(middleware.InternalOnly(s.cfg.BillingAPIKey))
+	s.adminHandler.Use(middleware2.InternalOnly(s.cfg.BillingAPIKey))
 }
 
-func (s *Server) wrap(fn func(r *handlers.Request)) func(c *gin.Context) {
+func (s *Server) wrap(fn func(r *request.Request)) func(c *gin.Context) {
 	return func(c *gin.Context) {
-		fn(handlers.NewRequest(c, s.runtime))
+		fn(request.NewRequest(c, s.runtime))
 	}
 }
 

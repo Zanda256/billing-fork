@@ -3,15 +3,14 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/subscription"
+	"github.com/doujins-org/doujins-billing/internal/manager/web/request"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/doujins-org/doujins-billing/internal/handlers"
-	"github.com/doujins-org/doujins-billing/internal/services"
 )
 
 // TestGetProductsEndpoint tests the public products endpoint
@@ -53,9 +52,9 @@ func TestSubscribeEndpoint(t *testing.T) {
 	server, token := setupTestServerWithAuth(t)
 
 	t.Run("Subscribe_RequiresAuth", func(t *testing.T) {
-		subscribeData := handlers.SubscribeRequest{
-			SubscribeBodyParams: handlers.SubscribeBodyParams{
-				SubscribeData: services.SubscribeData{
+		subscribeData := request.SubscribeRequest{
+			SubscribeBodyParams: request.SubscribeBodyParams{
+				SubscribeData: subscription.SubscribeData{
 					Processor: "nmi", Provider: "mobius",
 					PriceID: uuid.New().String(),
 				},
@@ -74,9 +73,9 @@ func TestSubscribeEndpoint(t *testing.T) {
 	})
 
 	t.Run("Subscribe_WithAuth", func(t *testing.T) {
-		subscribeData := handlers.SubscribeRequest{
-			SubscribeBodyParams: handlers.SubscribeBodyParams{
-				SubscribeData: services.SubscribeData{
+		subscribeData := request.SubscribeRequest{
+			SubscribeBodyParams: request.SubscribeBodyParams{
+				SubscribeData: subscription.SubscribeData{
 					Processor: "nmi", Provider: "mobius",
 					PriceID: uuid.New().String(),
 				},
@@ -102,9 +101,9 @@ func TestSubscribeEndpoint(t *testing.T) {
 
 	t.Run("Subscribe_WithRS256Auth", func(t *testing.T) {
 		rsServer, rsToken := setupTestServerWithRSAuth(t)
-		subscribeData := handlers.SubscribeRequest{
-			SubscribeBodyParams: handlers.SubscribeBodyParams{
-				SubscribeData: services.SubscribeData{
+		subscribeData := request.SubscribeRequest{
+			SubscribeBodyParams: request.SubscribeBodyParams{
+				SubscribeData: subscription.SubscribeData{
 					Processor: "nmi", Provider: "mobius",
 					PriceID: uuid.New().String(),
 				},
@@ -131,8 +130,8 @@ func TestCancelSubscriptionEndpoint(t *testing.T) {
 	server, token := setupTestServerWithAuth(t)
 
 	t.Run("CancelSubscription_RequiresAuth", func(t *testing.T) {
-		cancelData := handlers.CancelSubscriptionRequest{
-			CancelSubscriptionBodyParams: handlers.CancelSubscriptionBodyParams{
+		cancelData := request.CancelSubscriptionRequest{
+			CancelSubscriptionBodyParams: request.CancelSubscriptionBodyParams{
 				Feedback: "Too expensive",
 			},
 		}
@@ -149,8 +148,8 @@ func TestCancelSubscriptionEndpoint(t *testing.T) {
 	})
 
 	t.Run("CancelSubscription_WithAuth", func(t *testing.T) {
-		cancelData := handlers.CancelSubscriptionRequest{
-			CancelSubscriptionBodyParams: handlers.CancelSubscriptionBodyParams{
+		cancelData := request.CancelSubscriptionRequest{
+			CancelSubscriptionBodyParams: request.CancelSubscriptionBodyParams{
 				Feedback: "Too expensive",
 			},
 		}
