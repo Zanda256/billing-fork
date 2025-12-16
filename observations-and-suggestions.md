@@ -21,7 +21,14 @@ Implement a layered architecture with:
   - Think of it as the standard lib of this project.
   - No configuration in this layer. Everything has to be passed in.
 
+Data models
+The structure in which data is represented in a database may differ from the way we want to present in to the user, 
+or even differ from the structure we want to process it as.
+This means we have to define suitable models at every stage. Models belong to a package, not the entire app. 
+The application layer can have a different user model from the business layer, which then differs from the user model 
+stored in cache and in postgres.
 
+Key points
 Group things according to domain e.g `payment` , `billing`, `notification`, `solana`
 Move code that doesn't depend on our business logic into pkg folder e.g `internal/integrations`. 
 Our pkg directory should contain functionality that can even be moved to different repo altogether.
