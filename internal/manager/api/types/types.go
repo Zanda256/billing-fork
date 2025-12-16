@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/doujins-org/doujins-billing/internal/manager/api/dunning"
-	"github.com/doujins-org/doujins-billing/internal/manager/web/webhook"
 	"github.com/doujins-org/doujins-billing/pkg/db/models"
 )
 
@@ -136,9 +135,30 @@ func (i Intish) Int() int {
 
 // -------------------------------- NMI Webhook Types --------------------------------
 
+type NMIWebhookEventType = string
+
+const (
+	// Subscription lifecycle events
+	EventTypeNMIAddSubscription    NMIWebhookEventType = "recurring.subscription.add"
+	EventTypeNMIUpdateSubscription NMIWebhookEventType = "recurring.subscription.update"
+	EventTypeNMIDeleteSubscription NMIWebhookEventType = "recurring.subscription.delete"
+
+	// Transaction events
+	EventTypeNMITransactionSuccess NMIWebhookEventType = "transaction.sale.success"
+	EventTypeNMITransactionFailure NMIWebhookEventType = "transaction.sale.failure"
+
+	// Automatic Card Updater (ACU) events
+	EventTypeNMIACUUpdated         NMIWebhookEventType = "acu.summary.automaticallyupdated"
+	EventTypeNMIACUContactCustomer NMIWebhookEventType = "acu.summary.contactcustomer"
+	EventTypeNMIACUClosedAccount   NMIWebhookEventType = "acu.summary.closedaccount"
+
+	// Chargeback events
+	EventTypeNMIChargebackComplete NMIWebhookEventType = "chargeback.batch.complete"
+)
+
 type NMIWebhookEvent struct {
 	EventID   string                      `json:"event_id" validate:"required"`
-	EventType webhook.NMIWebhookEventType `json:"event_type" validate:"required"`
+	EventType NMIWebhookEventType `json:"event_type" validate:"required"`
 	EventBody json.RawMessage             `json:"event_body" validate:"required"`
 }
 
@@ -963,6 +983,70 @@ func (e CCBillVoidEvent) GetSubscriptionID() string        { return e.Subscripti
 func (e CCBillVoidEvent) GetClientAccnum() string          { return e.ClientAccnum }
 func (e CCBillVoidEvent) GetClientSubacc() string          { return e.ClientSubacc }
 func (e CCBillVoidEvent) GetTimestamp() string             { return e.Timestamp }
+
+// -------------------------------- Vault Types --------------------------------
+
+type CreateVaultRequest struct {
+	PaymentToken string
+	Provider     string
+	FirstName    string
+	LastName     string
+	Address1     string
+	City         string
+	State        string
+	Zip          string
+	Country      string
+	Phone        string
+	Email        string
+	Company      string
+	Address2     string
+}
+
+type UpdateVaultRequest struct {
+	PaymentToken *string
+	Provider     *string
+	FirstName    *string
+	LastName     *string
+	Address1     *string
+	City         *string
+	State        *string
+	Zip          *string
+	Country      *string
+	Phone        *string
+	Email        *string
+	Company      *string
+	Address2     *string
+}
+
+// -------------------------------- Subscription Types --------------------------------
+
+type SubscribeData struct {
+	Email           string `json:"email"`
+	FirstName       string `json:"first_name"`
+	LastName        string `json:"last_name"`
+	Address1        string `json:"address1"`
+	City            string `json:"city"`
+	State           string `json:"state"`
+	Zip             string `json:"zip"`
+	Country         string `json:"country"`
+	PriceID         string `json:"price_id"`
+	Processor       string `json:"processor"`
+	Provider        string `json:"provider,omitempty"`
+	PaymentToken    string `json:"payment_token,omitempty"`
+	PaymentMethodID string `json:"payment_method_id,omitempty"`
+}
+
+type SubscribeResponse struct {
+	URL            string `json:"url,omitempty"`
+	Status         string `json:"status,omitempty"`
+	Message        string `json:"message,omitempty"`
+	SubscriptionID string `json:"subscription_id,omitempty"`
+}
+
+type PublicProductResponse struct {
+	*models.Product
+	Prices []*models.Price `json:"prices"`
+}
 
 // Legacy grantRole helpers removed; entitlement logic lives in lifecycle/webhook services.
 

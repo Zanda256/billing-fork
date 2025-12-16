@@ -1,10 +1,20 @@
-package models
+package payment_methoddb
 
 import (
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
+)
+
+// Processor represents payment processor types
+type Processor string
+
+const (
+	ProcessorNMI    Processor = "nmi"
+	ProcessorCCBill Processor = "ccbill"
+	ProcessorSolana Processor = "solana"
+	ProcessorPayPal Processor = "paypal"
 )
 
 // PaymentMethod represents a stored payment method across multiple processors

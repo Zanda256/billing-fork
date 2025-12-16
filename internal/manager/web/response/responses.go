@@ -1,18 +1,18 @@
 package response
 
 import (
-	"github.com/doujins-org/doujins-billing/internal/manager/api/subscription"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/types"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/user"
 	"time"
 )
 
 type GetSubscriptionResponse = user.UserSubscriptionResponse
 
-type SubscribeResponse = subscription.SubscribeResponse
+type SubscribeResponse = types.SubscribeResponse
 
-type GetProductsResponse = []*subscription.PublicProductResponse
+type GetProductsResponse = []*types.PublicProductResponse
 
-func NewGetProductsResponse(products []*subscription.PublicProductResponse) GetProductsResponse {
+func NewGetProductsResponse(products []*types.PublicProductResponse) GetProductsResponse {
 	return GetProductsResponse(products)
 }
 

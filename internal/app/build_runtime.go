@@ -13,12 +13,12 @@ import (
 	"github.com/doujins-org/doujins-billing/internal/manager/api/lifecycle"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/notification"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/payment"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/payment/stores/paymentdb"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/price"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/product"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/solana"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/subscription"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/user"
-	"github.com/doujins-org/doujins-billing/internal/manager/api/vault"
 	"github.com/doujins-org/doujins-billing/internal/manager/data/migrations/clickhouse"
 	"github.com/doujins-org/doujins-billing/internal/manager/data/migrations/postgres"
 	"github.com/doujins-org/doujins-billing/internal/manager/data/repo"
@@ -319,7 +319,8 @@ func createServices(database *db.DB, cfg *config.Config, ccbillRESTClient *ccbil
 	priceService := price.NewPriceService(database)
 	notificationQueueService := notification.NewNotificationQueueService(database)
 	paymentMethodService := payment.NewPaymentMethodService(database)
-	purchaseService := payment.NewPaymentService(database)
+	paymentStore := paymentdb.NewPaymentRepo(database)
+	purchaseService := payment.NewPaymentService(paymentStore)
 	entitlementService := entitlement.NewEntitlementService(database)
 	aliasService := cc_bill_alias.NewCCBillAliasService(database)
 	solanaWalletService := solana.NewSolanaWalletService(database)

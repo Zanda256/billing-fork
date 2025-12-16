@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/doujins-org/doujins-billing/internal/manager/data/repo"
-	"github.com/doujins-org/doujins-billing/pkg/db"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/payment/stores/paymentdb"
 	models2 "github.com/doujins-org/doujins-billing/pkg/db/models"
 	"strings"
 	"time"
@@ -14,16 +13,28 @@ import (
 	"github.com/google/uuid"
 )
 
+type Storer interface {
+	Create(ctx context.Context, payment *models2.Payment) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models2.Payment, error)
+	GetByUserID(ctx context.Context, userID string) ([]*models2.Payment, error)
+	GetByTransactionID(ctx context.Context, processor models2.Processor, transactionID string) (*models2.Payment, error)
+	GetByPriceID(ctx context.Context, priceID uuid.UUID) ([]*models2.Payment, error)
+	GetByProcessor(ctx context.Context, processor models2.Processor) ([]*models2.Payment, error)
+	GetRefundTotalByPaymentID(ctx context.Context, paymentID uuid.UUID) (float64, error)
+	GetPaginatedByUserID(ctx context.Context, userID string, page, pageSize int) ([]*models2.Payment, int, error)
+	GetPayments(ctx context.Context, opts query.QueryOptions[paymentdb.PaymentFilters]) ([]*models2.Payment, int64, error)
+}
+
 type PaymentService struct {
-	repo *repo.PaymentRepo
+	repo Storer
 }
 
 const refundEpsilon = 0.0001
 
-type GetPaymentsFilters = repo.PaymentFilters
+type GetPaymentsFilters = paymentdb.PaymentFilters
 
-func NewPaymentService(db *db.DB) *PaymentService {
-	return &PaymentService{repo: repo.NewPaymentRepo(db)}
+func NewPaymentService(repo Storer) *PaymentService {
+	return &PaymentService{repo: repo}
 }
 
 func (s *PaymentService) Create(ctx context.Context, payment *models2.Payment) error {
@@ -112,8 +123,8 @@ func (s *PaymentService) GetPaginatedByUserID(ctx context.Context, userID string
 }
 
 func (s *PaymentService) GetPayments(ctx context.Context, queryOpts query.QueryOptions[GetPaymentsFilters]) ([]*models2.Payment, int64, error) {
-	repoOpts := query.QueryOptions[repo.PaymentFilters]{
-		Filters: repo.PaymentFilters{
+	repoOpts := query.QueryOptions[paymentdb.PaymentFilters]{
+		Filters: paymentdb.PaymentFilters{
 			UserID:    queryOpts.Filters.UserID,
 			PriceID:   queryOpts.Filters.PriceID,
 			Processor: queryOpts.Filters.Processor,

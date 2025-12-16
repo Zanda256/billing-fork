@@ -1,35 +1,27 @@
-package repo
+package paymentdb
 
 import (
-	"context"
 	"database/sql"
-	"errors"
+	"github.com/docker/docker/daemon/logger"
 	"github.com/doujins-org/doujins-billing/pkg/db"
 	models2 "github.com/doujins-org/doujins-billing/pkg/db/models"
-	"math"
-	"time"
-
 	"github.com/doujins-org/doujins-billing/pkg/query"
 	"github.com/google/uuid"
+	"math"
+
+	"context"
+	"errors"
 )
 
-type PaymentFilters struct {
-	UserID    string
-	PriceID   uuid.UUID
-	Processor string
-	StartDate *time.Time
-	EndDate   *time.Time
-	MinAmount *float64
-	MaxAmount *float64
+// Store manages the set of APIs for user database access.
+type Store struct {
+	log *logger.Logger
+	db  *db.DB
 }
 
-type PaymentRepo struct {
-	db *db.DB
-}
+func NewPaymentRepo(d *db.DB) *Store { return &Store{db: d} }
 
-func NewPaymentRepo(d *db.DB) *PaymentRepo { return &PaymentRepo{db: d} }
-
-func (r *PaymentRepo) Create(ctx context.Context, payment *models2.Payment) error {
+func (r *Store) Create(ctx context.Context, payment *models2.Payment) error {
 	res, err := r.db.GetDB().NewInsert().Model(payment).Exec(ctx)
 	if err != nil {
 		return err
@@ -44,7 +36,7 @@ func (r *PaymentRepo) Create(ctx context.Context, payment *models2.Payment) erro
 	return nil
 }
 
-func (r *PaymentRepo) GetByID(ctx context.Context, id uuid.UUID) (*models2.Payment, error) {
+func (r *Store) GetByID(ctx context.Context, id uuid.UUID) (*models2.Payment, error) {
 	payment := new(models2.Payment)
 	if err := r.db.GetDB().NewSelect().Model(payment).Where("purch.id = ?", id).Scan(ctx); err != nil {
 		return nil, err
@@ -52,7 +44,7 @@ func (r *PaymentRepo) GetByID(ctx context.Context, id uuid.UUID) (*models2.Payme
 	return payment, nil
 }
 
-func (r *PaymentRepo) GetByUserID(ctx context.Context, userID string) ([]*models2.Payment, error) {
+func (r *Store) GetByUserID(ctx context.Context, userID string) ([]*models2.Payment, error) {
 	payments := []*models2.Payment{}
 	if err := r.db.GetDB().NewSelect().Model(&payments).Where("purch.user_id = ?", userID).OrderExpr("purch.purchased_at DESC").Scan(ctx); err != nil {
 		return nil, err
@@ -60,7 +52,7 @@ func (r *PaymentRepo) GetByUserID(ctx context.Context, userID string) ([]*models
 	return payments, nil
 }
 
-func (r *PaymentRepo) GetByTransactionID(ctx context.Context, processor models2.Processor, transactionID string) (*models2.Payment, error) {
+func (r *Store) GetByTransactionID(ctx context.Context, processor models2.Processor, transactionID string) (*models2.Payment, error) {
 	payment := new(models2.Payment)
 	if err := r.db.GetDB().NewSelect().Model(payment).Where("purch.processor = ?", processor).Where("purch.transaction_id = ?", transactionID).Scan(ctx); err != nil {
 		return nil, err
@@ -68,7 +60,7 @@ func (r *PaymentRepo) GetByTransactionID(ctx context.Context, processor models2.
 	return payment, nil
 }
 
-func (r *PaymentRepo) GetByPriceID(ctx context.Context, priceID uuid.UUID) ([]*models2.Payment, error) {
+func (r *Store) GetByPriceID(ctx context.Context, priceID uuid.UUID) ([]*models2.Payment, error) {
 	payments := []*models2.Payment{}
 	if err := r.db.GetDB().NewSelect().Model(&payments).Where("purch.price_id = ?", priceID).OrderExpr("purch.purchased_at DESC").Scan(ctx); err != nil {
 		return nil, err
@@ -76,7 +68,7 @@ func (r *PaymentRepo) GetByPriceID(ctx context.Context, priceID uuid.UUID) ([]*m
 	return payments, nil
 }
 
-func (r *PaymentRepo) GetByProcessor(ctx context.Context, processor models2.Processor) ([]*models2.Payment, error) {
+func (r *Store) GetByProcessor(ctx context.Context, processor models2.Processor) ([]*models2.Payment, error) {
 	payments := []*models2.Payment{}
 	if err := r.db.GetDB().NewSelect().Model(&payments).Where("purch.processor = ?", processor).OrderExpr("purch.purchased_at DESC").Scan(ctx); err != nil {
 		return nil, err
@@ -84,7 +76,7 @@ func (r *PaymentRepo) GetByProcessor(ctx context.Context, processor models2.Proc
 	return payments, nil
 }
 
-func (r *PaymentRepo) Delete(ctx context.Context, id uuid.UUID) error {
+func (r *Store) Delete(ctx context.Context, id uuid.UUID) error {
 	res, err := r.db.GetDB().NewDelete().Model((*models2.Payment)(nil)).Where("purch.id = ?", id).Exec(ctx)
 	if err != nil {
 		return err
@@ -99,7 +91,7 @@ func (r *PaymentRepo) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (r *PaymentRepo) GetRefundTotalByPaymentID(ctx context.Context, paymentID uuid.UUID) (float64, error) {
+func (r *Store) GetRefundTotalByPaymentID(ctx context.Context, paymentID uuid.UUID) (float64, error) {
 	var total sql.NullFloat64
 	if err := r.db.GetDB().NewSelect().
 		Model((*models2.Payment)(nil)).
@@ -111,7 +103,7 @@ func (r *PaymentRepo) GetRefundTotalByPaymentID(ctx context.Context, paymentID u
 	return math.Abs(total.Float64), nil
 }
 
-func (r *PaymentRepo) GetPaginatedByUserID(ctx context.Context, userID string, page, pageSize int) ([]*models2.Payment, int, error) {
+func (r *Store) GetPaginatedByUserID(ctx context.Context, userID string, page, pageSize int) ([]*models2.Payment, int, error) {
 	payments := []*models2.Payment{}
 	offset := (page - 1) * pageSize
 
@@ -127,7 +119,7 @@ func (r *PaymentRepo) GetPaginatedByUserID(ctx context.Context, userID string, p
 	return payments, count, nil
 }
 
-func (r *PaymentRepo) GetPayments(ctx context.Context, opts query.QueryOptions[PaymentFilters]) ([]*models2.Payment, int64, error) {
+func (r *Store) GetPayments(ctx context.Context, opts query.QueryOptions[PaymentFilters]) ([]*models2.Payment, int64, error) {
 	payments := []*models2.Payment{}
 	q := r.db.GetDB().NewSelect().Model(&payments)
 

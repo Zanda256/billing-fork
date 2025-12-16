@@ -6,41 +6,31 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/doujins-org/doujins-billing/internal/manager/api/email"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/idempotency"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/notification"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/payment"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/price"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/product"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/types"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/user"
-	"github.com/doujins-org/doujins-billing/internal/manager/api/vault"
 	"github.com/doujins-org/doujins-billing/internal/manager/data/repo"
 	"github.com/doujins-org/doujins-billing/pkg/ccbill"
 	"github.com/doujins-org/doujins-billing/pkg/db"
 	models2 "github.com/doujins-org/doujins-billing/pkg/db/models"
 	"github.com/doujins-org/doujins-billing/pkg/nmi"
-	"strings"
-	"time"
 
 	"github.com/doujins-org/doujins-billing/pkg/query"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
 
-type SubscribeData struct {
-	Email           string `json:"email"`
-	FirstName       string `json:"first_name"`
-	LastName        string `json:"last_name"`
-	Address1        string `json:"address1"`
-	City            string `json:"city"`
-	State           string `json:"state"`
-	Zip             string `json:"zip"`
-	Country         string `json:"country"`
-	PriceID         string `json:"price_id"`
-	Processor       string `json:"processor"`
-	Provider        string `json:"provider,omitempty"`
-	PaymentToken    string `json:"payment_token,omitempty"`
-	PaymentMethodID string `json:"payment_method_id,omitempty"`
+
+type SubscriptionService interface {
+	GetPaginatedByUserID(ctx context.Context, userID string, page, pageSize int) ([]models2.Subscription, int, error)
 }
 
 type GetSubscriptionsFilters struct {
@@ -50,19 +40,19 @@ type GetSubscriptionsFilters struct {
 	Processor string    `form:"processor"`
 }
 
-type SubscriptionService struct {
+type SubscriptionServiceImpl struct {
 	subscriptionRepo         *repo.SubscriptionRepo
 	PriceService             *price.PriceService
 	ProductService           *product.ProductService
 	NotificationQueueService *notification.NotificationQueueService
 	CCBillRESTClient         *ccbill.RESTClient
 	NMIClients               map[string]*nmi.NMIClient
-	PaymentMethodService     *payment.PaymentMethodService
-	VaultService             *vault.VaultService
-	IdempotencyService       *idempotency.IdempotencyService
+	PaymentMethodService *payment.PaymentMethodService
+	VaultService         vault.VaultService
+	IdempotencyService   *idempotency.IdempotencyService
 }
 
-func (s *SubscriptionService) nmiClientForProvider(provider string) (*nmi.NMIClient, error) {
+func (s *SubscriptionServiceImpl) nmiClientForProvider(provider string) (*nmi.NMIClient, error) {
 	providerKey := strings.TrimSpace(strings.ToLower(provider))
 	if providerKey == "" {
 		providerKey = "mobius"
@@ -111,14 +101,7 @@ var (
 	}
 )
 
-type SubscribeResponse struct {
-	URL            string `json:"url,omitempty"`
-	Status         string `json:"status,omitempty"`
-	Message        string `json:"message,omitempty"`
-	SubscriptionID string `json:"subscription_id,omitempty"`
-}
-
-func (s *SubscriptionService) Subscribe(ctx context.Context, data *SubscribeData, user *user.UserIdentity) (any, error) {
+func (s *SubscriptionServiceImpl) Subscribe(ctx context.Context, data *types.SubscribeData, user *user.UserIdentity) (any, error) {
 	priceID, err := uuid.Parse(data.PriceID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid price ID: %w", err)
@@ -288,7 +271,7 @@ func (s *SubscriptionService) Subscribe(ctx context.Context, data *SubscribeData
 				return nil, errors.New("vault service unavailable")
 			}
 
-			vaultReq := &vault.CreateVaultRequest{
+			vaultReq := &types.CreateVaultRequest{
 				PaymentToken: trimmedToken,
 				Provider:     provider,
 				FirstName:    params.FirstName,
@@ -301,7 +284,13 @@ func (s *SubscriptionService) Subscribe(ctx context.Context, data *SubscribeData
 				Email:        email,
 			}
 
-			pm, err := s.VaultService.CreateVault(ctx, user, vaultReq)
+			dbUser := &models2.User{
+				ID:       user.ID,
+				Email:    user.Email,
+				Username: user.Username,
+			}
+
+			pm, err := s.VaultService.CreateVault(ctx, dbUser, vaultReq)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create payment method: %w", err)
 			}
@@ -323,7 +312,7 @@ func (s *SubscriptionService) Subscribe(ctx context.Context, data *SubscribeData
 		}
 
 		resp, err := client.AddRecurringSubscription(params)
-		if err != nil {
+		if err != nil {.
 			if idemReq != nil {
 				_ = s.IdempotencyService.Fail(ctx, idemReq.ID, err)
 			}
@@ -384,12 +373,12 @@ func (s *SubscriptionService) Subscribe(ctx context.Context, data *SubscribeData
 }
 
 // GetUserSubscription retrieves the current subscription for a user
-func (s *SubscriptionService) GetUserSubscription(ctx context.Context, userID string) (*models2.Subscription, error) {
+func (s *SubscriptionServiceImpl) GetUserSubscription(ctx context.Context, userID string) (*models2.Subscription, error) {
 	return s.GetByUserID(ctx, userID)
 }
 
 // CancelUserSubscription cancels a user's subscription
-func (s *SubscriptionService) CancelUserSubscription(ctx context.Context, userID string, feedback string) error {
+func (s *SubscriptionServiceImpl) CancelUserSubscription(ctx context.Context, userID string, feedback string) error {
 	subscription, err := s.GetByUserID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("subscription not found: %w", err)
@@ -443,7 +432,7 @@ func buildNMIIdempotencyKey(userID string, priceID uuid.UUID, paymentToken strin
 }
 
 // GetAvailableProducts returns all active products with their prices
-func (s *SubscriptionService) GetAvailableProducts(ctx context.Context) ([]*models2.Product, error) {
+func (s *SubscriptionServiceImpl) GetAvailableProducts(ctx context.Context) ([]*models2.Product, error) {
 	products, err := s.ProductService.GetActive(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active products: %w", err)
@@ -473,8 +462,8 @@ func NewSubscriptionService(
 	ccbillRESTClient *ccbill.RESTClient,
 	nmiClients map[string]*nmi.NMIClient,
 	paymentMethodService *payment.PaymentMethodService,
-) *SubscriptionService {
-	return &SubscriptionService{
+) *SubscriptionServiceImpl {
+	return &SubscriptionServiceImpl{
 		subscriptionRepo:         repo.NewSubscriptionRepo(db),
 		PriceService:             priceService,
 		ProductService:           productService,
@@ -485,27 +474,27 @@ func NewSubscriptionService(
 	}
 }
 
-func (s *SubscriptionService) Create(ctx context.Context, subscription *models2.Subscription) error {
+func (s *SubscriptionServiceImpl) Create(ctx context.Context, subscription *models2.Subscription) error {
 	return s.subscriptionRepo.Create(ctx, subscription)
 }
 
-func (s *SubscriptionService) GetByID(ctx context.Context, id uuid.UUID) (*models2.Subscription, error) {
+func (s *SubscriptionServiceImpl) GetByID(ctx context.Context, id uuid.UUID) (*models2.Subscription, error) {
 	return s.subscriptionRepo.GetByID(ctx, id)
 }
 
-func (s *SubscriptionService) GetByUserID(ctx context.Context, id string) (*models2.Subscription, error) {
+func (s *SubscriptionServiceImpl) GetByUserID(ctx context.Context, id string) (*models2.Subscription, error) {
 	return s.subscriptionRepo.GetLatestByUserID(ctx, id)
 }
 
-func (s *SubscriptionService) GetByUserIDAndPriceID(ctx context.Context, id string, priceID uuid.UUID) (*models2.Subscription, error) {
+func (s *SubscriptionServiceImpl) GetByUserIDAndPriceID(ctx context.Context, id string, priceID uuid.UUID) (*models2.Subscription, error) {
 	return s.subscriptionRepo.GetByUserIDAndPriceID(ctx, id, priceID)
 }
 
-func (s *SubscriptionService) Update(ctx context.Context, subscription *models2.Subscription) error {
+func (s *SubscriptionServiceImpl) Update(ctx context.Context, subscription *models2.Subscription) error {
 	return s.subscriptionRepo.Update(ctx, subscription)
 }
 
-func (s *SubscriptionService) GetSubscribers(ctx context.Context, params query.QueryOptions[GetSubscriptionsFilters]) ([]*models2.Subscription, int64, error) {
+func (s *SubscriptionServiceImpl) GetSubscribers(ctx context.Context, params query.QueryOptions[GetSubscriptionsFilters]) ([]*models2.Subscription, int64, error) {
 	repoParams := query.QueryOptions[repo.SubscriptionFilters]{
 		Filters: repo.SubscriptionFilters{
 			UserID:    params.Filters.UserID,
@@ -520,41 +509,41 @@ func (s *SubscriptionService) GetSubscribers(ctx context.Context, params query.Q
 	return s.subscriptionRepo.GetSubscribers(ctx, repoParams)
 }
 
-func (s *SubscriptionService) GetPaginatedByUserID(ctx context.Context, userID string, page, pageSize int) ([]models2.Subscription, int, error) {
+func (s *SubscriptionServiceImpl) GetPaginatedByUserID(ctx context.Context, userID string, page, pageSize int) ([]models2.Subscription, int, error) {
 	return s.subscriptionRepo.GetPaginatedByUserID(ctx, userID, page, pageSize)
 }
 
 // GetSubscriptionsWithDetailsForUser retrieves subscriptions with related price information for billing history
-func (s *SubscriptionService) GetSubscriptionsWithDetailsForUser(ctx context.Context, userID string, page, pageSize int) ([]models2.Subscription, int, error) {
+func (s *SubscriptionServiceImpl) GetSubscriptionsWithDetailsForUser(ctx context.Context, userID string, page, pageSize int) ([]models2.Subscription, int, error) {
 	return s.subscriptionRepo.GetSubscriptionsWithDetailsForUser(ctx, userID, page, pageSize)
 }
 
 // GetActiveSubscriptionsByUserID retrieves only active subscriptions for a user
-func (s *SubscriptionService) GetActiveSubscriptionsByUserID(ctx context.Context, userID string) ([]models2.Subscription, error) {
+func (s *SubscriptionServiceImpl) GetActiveSubscriptionsByUserID(ctx context.Context, userID string) ([]models2.Subscription, error) {
 	return s.subscriptionRepo.GetActiveSubscriptionsByUserID(ctx, userID)
 }
 
 // GetSubscriptionsByProcessorAndUserID retrieves subscriptions filtered by processor
-func (s *SubscriptionService) GetSubscriptionsByProcessorAndUserID(ctx context.Context, userID string, processor models2.Processor) ([]models2.Subscription, error) {
+func (s *SubscriptionServiceImpl) GetSubscriptionsByProcessorAndUserID(ctx context.Context, userID string, processor models2.Processor) ([]models2.Subscription, error) {
 	return s.subscriptionRepo.GetSubscriptionsByProcessorAndUserID(ctx, userID, processor)
 }
 
 // GetActiveSubscription retrieves the active subscription for a user
-func (s *SubscriptionService) GetActiveSubscription(ctx context.Context, userID string) (*models2.Subscription, error) {
+func (s *SubscriptionServiceImpl) GetActiveSubscription(ctx context.Context, userID string) (*models2.Subscription, error) {
 	return s.subscriptionRepo.GetActiveSubscription(ctx, userID)
 }
 
 // GetByProcessorSubscriptionID finds a subscription by processor, provider, and processor_subscription_id
-func (s *SubscriptionService) GetByProcessorSubscriptionID(ctx context.Context, processor, provider, processorSubscriptionID string) (*models2.Subscription, error) {
+func (s *SubscriptionServiceImpl) GetByProcessorSubscriptionID(ctx context.Context, processor, provider, processorSubscriptionID string) (*models2.Subscription, error) {
 	return s.subscriptionRepo.GetByProcessorSubscriptionID(ctx, processor, provider, processorSubscriptionID)
 }
 
 // GetActiveSubscriptionsByProcessor gets all active subscriptions for a processor
-func (s *SubscriptionService) GetActiveSubscriptionsByProcessor(ctx context.Context, processor string) ([]*models2.Subscription, error) {
+func (s *SubscriptionServiceImpl) GetActiveSubscriptionsByProcessor(ctx context.Context, processor string) ([]*models2.Subscription, error) {
 	return s.subscriptionRepo.GetActiveSubscriptionsByProcessor(ctx, processor)
 }
 
 // Delete removes a subscription from the database permanently
-func (s *SubscriptionService) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *SubscriptionServiceImpl) Delete(ctx context.Context, id uuid.UUID) error {
 	return s.subscriptionRepo.Delete(ctx, id)
 }

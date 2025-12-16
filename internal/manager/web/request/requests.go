@@ -1,7 +1,7 @@
 package request
 
 import (
-	"github.com/doujins-org/doujins-billing/internal/manager/api/subscription"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/types"
 	"time"
 )
 
@@ -64,7 +64,7 @@ type GetSubscriptionRequest struct {
 // -------------------------------- Subscribe Request --------------------------------
 
 type SubscribeBodyParams struct {
-	subscription.SubscribeData
+	types.SubscribeData
 }
 
 type SubscribeRequest struct {

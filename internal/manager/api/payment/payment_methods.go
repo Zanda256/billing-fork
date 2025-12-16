@@ -3,7 +3,7 @@ package payment
 import (
 	"context"
 	"errors"
-	"github.com/doujins-org/doujins-billing/internal/manager/api/vault"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/types"
 	"github.com/doujins-org/doujins-billing/internal/manager/web/request"
 	"github.com/doujins-org/doujins-billing/internal/manager/web/response"
 	"github.com/doujins-org/doujins-billing/pkg/db/models"
@@ -42,7 +42,7 @@ func CreatePaymentMethod(r *request.Request) {
 	ctx, cancel := context.WithTimeout(r.Request.Context(), 10*time.Second)
 	defer cancel()
 
-	createReq := &vault.CreateVaultRequest{
+	createReq := &types.CreateVaultRequest{
 		PaymentToken: req.PaymentToken,
 		FirstName:    req.FirstName,
 		LastName:     req.LastName,
@@ -63,7 +63,13 @@ func CreatePaymentMethod(r *request.Request) {
 		createReq.Email = strings.TrimSpace(*user.Email)
 	}
 
-	pm, err := r.State.VaultService.CreateVault(ctx, user, createReq)
+	dbUser := &models.User{
+		ID:       user.ID,
+		Email:    user.Email,
+		Username: user.Username,
+	}
+
+	pm, err := r.State.VaultService.CreateVault(ctx, dbUser, createReq)
 	if err != nil {
 		log.WithError(err).WithField("user_id", user.ID).Error("Failed to create payment method")
 		r.ErrorJSON(http.StatusBadRequest, err.Error())
@@ -130,7 +136,7 @@ func UpdatePaymentMethod(r *request.Request) {
 		return
 	}
 
-	updateReq := &vault.UpdateVaultRequest{
+	updateReq := &types.UpdateVaultRequest{
 		PaymentToken: &trimmedToken,
 		Provider:     req.Provider,
 		FirstName:    req.FirstName,

@@ -239,23 +239,24 @@ func (s *NMIWebhookService) HandleNMIWebhook(ctx context.Context) error {
 	return s.handleWebhook(ctx)
 }
 
+
 func (s *NMIWebhookService) handleWebhook(ctx context.Context) error {
 	switch s.Data.EventType {
 	// Subscription lifecycle events
-	case EventTypeNMIAddSubscription:
+	case types.EventTypeNMIAddSubscription:
 		return s.handleAddSubscription(ctx)
-	case EventTypeNMIUpdateSubscription:
+	case types.EventTypeNMIUpdateSubscription:
 		return s.handleUpdateSubscription(ctx)
-	case EventTypeNMIDeleteSubscription:
+	case types.EventTypeNMIDeleteSubscription:
 		return s.handleDeleteSubscription(ctx)
-	case EventTypeNMITransactionSuccess:
+	case types.EventTypeNMITransactionSuccess:
 		return s.handleTransactionSaleSuccess(ctx)
-	case EventTypeNMITransactionFailure:
+	case types.EventTypeNMITransactionFailure:
 		return s.handleTransactionSaleFailure(ctx)
-	case EventTypeNMIACUUpdated, EventTypeNMIACUContactCustomer, EventTypeNMIACUClosedAccount:
+	case types.EventTypeNMIACUUpdated, types.EventTypeNMIACUContactCustomer, types.EventTypeNMIACUClosedAccount:
 		return s.handleACUEvent(ctx)
 
-	case EventTypeNMIChargebackComplete:
+	case types.EventTypeNMIChargebackComplete:
 		return s.handleChargebackComplete(ctx)
 
 	default:

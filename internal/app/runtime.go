@@ -17,7 +17,7 @@ import (
 	"github.com/doujins-org/doujins-billing/internal/manager/api/solana"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/subscription"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/user"
-	"github.com/doujins-org/doujins-billing/internal/manager/api/vault"
+	"github.com/doujins-org/doujins-billing/internal/manager/data/vault"
 	"github.com/doujins-org/doujins-billing/internal/manager/web/webhook"
 	ccbill2 "github.com/doujins-org/doujins-billing/pkg/ccbill"
 	"github.com/doujins-org/doujins-billing/pkg/db"

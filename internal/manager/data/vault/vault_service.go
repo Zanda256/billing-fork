@@ -1,18 +1,18 @@
-package vault
+package services
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/doujins-org/doujins-billing/internal/manager/api/payment"
-	"github.com/doujins-org/doujins-billing/internal/manager/api/subscription"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/user"
 	"github.com/doujins-org/doujins-billing/pkg/db"
-	models2 "github.com/doujins-org/doujins-billing/pkg/db/models"
-	"github.com/doujins-org/doujins-billing/pkg/nmi"
+	"github.com/doujins-org/doujins-billing/pkg/db/models"
 	"strings"
 	"time"
 
+	"github.com/doujins-org/doujins-billing/internal/manager/api/payment"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/subscription"
+	"github.com/doujins-org/doujins-billing/pkg/nmi"
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 )
@@ -66,7 +66,7 @@ func NewVaultService(pm *payment.PaymentMethodService, sub *subscription.Subscri
 }
 
 // CreateVault creates a NMI customer vault and stores a local PaymentMethod
-func (s *VaultService) CreateVault(ctx context.Context, user *user.UserIdentity, req *CreateVaultRequest) (*models2.PaymentMethod, error) {
+func (s *VaultService) CreateVault(ctx context.Context, user *user.UserIdentity, req *CreateVaultRequest) (*models.PaymentMethod, error) {
 	provider := strings.TrimSpace(strings.ToLower(req.Provider))
 	if provider == "" {
 		provider = "mobius"
@@ -99,10 +99,10 @@ func (s *VaultService) CreateVault(ctx context.Context, user *user.UserIdentity,
 	}
 
 	providerCopy := provider
-	pm := &models2.PaymentMethod{
+	pm := &models.PaymentMethod{
 		ID:                   uuid.New(),
 		UserID:               user.ID,
-		Processor:            models2.ProcessorNMI,
+		Processor:            models.ProcessorNMI,
 		Provider:             &providerCopy,
 		VaultID:              nmiResponse.CustomerVaultID,
 		InitialTransactionID: "",
@@ -123,7 +123,7 @@ func (s *VaultService) CreateVault(ctx context.Context, user *user.UserIdentity,
 }
 
 // UpdateVault updates vault in NMI and updates local record timestamp
-func (s *VaultService) UpdateVault(ctx context.Context, pm *models2.PaymentMethod, req *UpdateVaultRequest) (*models2.PaymentMethod, error) {
+func (s *VaultService) UpdateVault(ctx context.Context, pm *models.PaymentMethod, req *UpdateVaultRequest) (*models.PaymentMethod, error) {
 	provider := "mobius"
 	if pm.Provider != nil && strings.TrimSpace(*pm.Provider) != "" {
 		provider = strings.TrimSpace(strings.ToLower(*pm.Provider))
@@ -199,7 +199,7 @@ func (s *VaultService) UpdateVault(ctx context.Context, pm *models2.PaymentMetho
 }
 
 // DeleteVault deletes the vault remotely after ensuring no active subscriptions use it; deactivates locally
-func (s *VaultService) DeleteVault(ctx context.Context, pm *models2.PaymentMethod) error {
+func (s *VaultService) DeleteVault(ctx context.Context, pm *models.PaymentMethod) error {
 	subs, _, err := s.SubscriptionService.GetPaginatedByUserID(ctx, pm.UserID, 1, 1000)
 	if err != nil {
 		log.WithError(err).WithFields(log.Fields{"vault_id": pm.VaultID, "user_id": pm.UserID}).Error("Failed to check subscriptions for vault")
@@ -208,7 +208,7 @@ func (s *VaultService) DeleteVault(ctx context.Context, pm *models2.PaymentMetho
 
 	activeCount := 0
 	for _, sub := range subs {
-		if sub.Status == models2.StatusActive || sub.Status == models2.StatusPastDue {
+		if sub.Status == models.StatusActive || sub.Status == models.StatusPastDue {
 			if sub.PaymentMethodID != nil && *sub.PaymentMethodID == pm.ID {
 				activeCount++
 			}
@@ -245,7 +245,7 @@ func (s *VaultService) DeleteVault(ctx context.Context, pm *models2.PaymentMetho
 }
 
 // ActivateVault sets this vault as active for the user and deactivates others
-func (s *VaultService) ActivateVault(ctx context.Context, pm *models2.PaymentMethod) (*models2.PaymentMethod, error) {
+func (s *VaultService) ActivateVault(ctx context.Context, pm *models.PaymentMethod) (*models.PaymentMethod, error) {
 	if !pm.IsActive {
 		return nil, errors.New("cannot activate inactive vault")
 	}
@@ -269,7 +269,7 @@ func (s *VaultService) ActivateVault(ctx context.Context, pm *models2.PaymentMet
 }
 
 // GetUserVaults lists vaults for user (optionally including inactive)
-func (s *VaultService) GetUserVaults(ctx context.Context, userID string, includeInactive bool) ([]*models2.PaymentMethod, error) {
+func (s *VaultService) GetUserVaults(ctx context.Context, userID string, includeInactive bool) ([]*models.PaymentMethod, error) {
 	if includeInactive {
 		return s.PaymentMethodService.GetByUserID(ctx, userID)
 	}
@@ -277,7 +277,7 @@ func (s *VaultService) GetUserVaults(ctx context.Context, userID string, include
 }
 
 // GetUserActiveVault returns the active vault for a user
-func (s *VaultService) GetUserActiveVault(ctx context.Context, userID string) (*models2.PaymentMethod, error) {
+func (s *VaultService) GetUserActiveVault(ctx context.Context, userID string) (*models.PaymentMethod, error) {
 	vaults, err := s.PaymentMethodService.GetActiveByUserID(ctx, userID)
 	if err != nil {
 		return nil, err

@@ -5,19 +5,33 @@ import (
 	"errors"
 	"fmt"
 	"github.com/doujins-org/doujins-billing/internal/manager/data/repo"
-	"github.com/doujins-org/doujins-billing/pkg/db"
-	"github.com/doujins-org/doujins-billing/pkg/db/models"
+	//"github.com/doujins-org/doujins-billing/pkg/db"
 	"strings"
 
 	"github.com/google/uuid"
 )
 
-type PaymentMethodService struct {
-	repo *repo.PaymentMethodRepo
+type PaymentMethodStore interface {
+	Create(ctx context.Context, m *model.PaymentMethod) error
+	GetByID(ctx context.Context, id uuid.UUID) (*models2.PaymentMethod, error)
+	Delete(ctx context.Context, id uuid.UUID) error
+	GetByUserID(ctx context.Context, userID string) ([]*models2.PaymentMethod, error)
+	GetActiveByUserID(ctx context.Context, userID string) ([]*models2.PaymentMethod, error)
+	ListByUserID(ctx context.Context, userID string, includeInactive bool, limit, offset int) ([]*models2.PaymentMethod, int64, error)
+	GetByVaultID(ctx context.Context, provider, vaultID string) (*models2.PaymentMethod, error)
+	GetByBillingID(ctx context.Context, provider, billingID string) (*models2.PaymentMethod, error)
+	GetByInitialTransactionID(ctx context.Context, provider, initialTransactionID string) (*models2.PaymentMethod, error)
+	DeactivateByUserID(ctx context.Context, userID string) error
+	Update(ctx context.Context, method *models2.PaymentMethod) error
+	ActivateByID(ctx context.Context, id uuid.UUID) error
 }
 
-func NewPaymentMethodService(db *db.DB) *PaymentMethodService {
-	return &PaymentMethodService{repo: repo.NewPaymentMethodRepo(db)}
+type PaymentMethodService struct {
+	repo PaymentMethodStore
+}
+
+func NewPaymentMethodService(db PaymentMethodStore) *PaymentMethodService {
+	return &PaymentMethodService{repo: db}
 }
 
 var (

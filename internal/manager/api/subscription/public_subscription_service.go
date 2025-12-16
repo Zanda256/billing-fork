@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/price"
 	"github.com/doujins-org/doujins-billing/internal/manager/api/product"
+	"github.com/doujins-org/doujins-billing/internal/manager/api/types"
 	"github.com/doujins-org/doujins-billing/pkg/db/models"
 
 	log "github.com/sirupsen/logrus"
@@ -16,22 +17,16 @@ type PublicSubscriptionService struct {
 	PriceService   *price.PriceService
 }
 
-// PublicProductResponse represents a product with pricing for public display
-type PublicProductResponse struct {
-	*models.Product
-	Prices []*models.Price `json:"prices"`
-}
-
 // GetAvailableProducts returns all active products with their prices for public consumption
-func (s *PublicSubscriptionService) GetAvailableProducts(ctx context.Context) ([]*PublicProductResponse, error) {
+func (s *PublicSubscriptionService) GetAvailableProducts(ctx context.Context) ([]*types.PublicProductResponse, error) {
 	products, err := s.ProductService.GetActive(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get products: %w", err)
 	}
 
-	responses := make([]*PublicProductResponse, len(products))
+	responses := make([]*types.PublicProductResponse, len(products))
 	for i, product := range products {
-		responses[i] = &PublicProductResponse{
+		responses[i] = &types.PublicProductResponse{
 			Product: product,
 		}
 
